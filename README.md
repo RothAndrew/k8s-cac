@@ -1,2 +1,3 @@
-# k8s-cac
+# Kubernetes Configuration as Code (K8s CaC)
+
 Configuration As Code for various kubernetes setups

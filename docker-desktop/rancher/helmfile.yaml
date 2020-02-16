@@ -1,0 +1,93 @@
+helmDefaults:
+  tillerless: true
+
+repositories:
+  - name: stable
+    url: https://kubernetes-charts.storage.googleapis.com
+  - name: incubator
+    url: https://kubernetes-charts-incubator.storage.googleapis.com
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: rancher-stable
+    url: https://releases.rancher.com/server-charts/stable
+
+releases:
+  - name: namespaces
+    labels:
+      component: k8s-system
+    chart: incubator/raw
+    version: ~0.2.3
+    missingFileHandler: Error
+    wait: true
+    values:
+      - resources:
+          - apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: ingress-nginx
+              labels:
+                istio-injection: enabled
+
+          - apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: cert-manager
+              labels:
+                istio-injection: enabled
+
+          - apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: cattle-system
+              labels:
+                istio-injection: enabled
+
+  - name: nginx-ingress
+    namespace: ingress-nginx
+    labels:
+      component: k8s-system
+    chart: stable/nginx-ingress
+    version: ~1.30.3
+    missingFileHandler: Error
+    wait: true
+    needs:
+      - namespaces
+
+  - name: cert-manager
+    namespace: cert-manager
+    labels:
+      component: k8s-system
+    chart: jetstack/cert-manager
+    version: ~0.13.0
+    missingFileHandler: Error
+    wait: true
+    needs:
+      - namespaces
+    hooks:
+      # This hook adds the CRDs
+      - events: ["presync"]
+        showlogs: true
+        command: "/bin/sh"
+        args:
+          [
+            "-c",
+            "kubectl apply --validate=false -f https://raw.githubusercontent.com/jetstack/cert-manager/release-0.13/deploy/manifests/00-crds.yaml",
+          ]
+
+  - name: rancher
+    namespace: cattle-system
+    labels:
+      chart: rancher
+      repo: rancher-stable
+      component: k8s-system
+    chart: rancher-stable/rancher
+    version: ~2.3.5
+    missingFileHandler: Error
+    wait: true
+    needs:
+      - namespaces
+      - ingress-nginx/nginx-ingress
+      - cert-manager/cert-manager
+    values:
+      - hostname: rancher.localhost
+        replicas: 1
